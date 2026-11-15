@@ -138,7 +138,26 @@ function toggleSave(id){
   localStorage.saved=JSON.stringify(saved);if(showSaved)render()
 }
 function tagHTML(a){const s=sent(a.title+" "+a.sum),l=(hi?{up:"तेज़ी",dn:"मंदी",nu:"सामान्य"}:{up:"Bullish",dn:"Bearish",nu:"Neutral"})[s];return tab==="Markets"||showSaved?`<span class="tag ${s}">${l}</span>`:""}
-function render(){
+
+const hiCache=(()=>{try{return JSON.parse(localStorage.hiCache||"{}")}catch(e){return{}}})();
+async function trHi(t){
+  if(!t)return"";const k=t.slice(0,200);if(hiCache[k])return hiCache[k];
+  try{const r=await fetch("https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=hi&dt=t&q="+encodeURIComponent(t));
+    const j=await r.json();const o=j[0].map(x=>x[0]).join("");hiCache[k]=o;return o}catch(e){return""}
+}
+let hiBusy=false;
+async function ensureHi(){
+  if(!hi||hiBusy)return;const list=(showSaved?saved:items).filter(a=>!a.title_hi);if(!list.length)return;
+  hiBusy=true;
+  for(let i=0;i<list.length;i+=6){
+    await Promise.all(list.slice(i,i+6).map(async a=>{a.title_hi=await trHi(a.title);a.sum_hi=await trHi(a.sum)}));
+    if(!hi)break;render(true);
+  }
+  hiBusy=false;
+  try{const ks=Object.keys(hiCache);if(ks.length>600)ks.slice(0,ks.length-600).forEach(k=>delete hiCache[k]);localStorage.hiCache=JSON.stringify(hiCache)}catch(e){}
+  try{if(!showSaved)localStorage["cache_"+tab]=JSON.stringify({t:Date.now(),d:items})}catch(e){}
+}
+function render(keep){
   const m=$("#main");m.className=view;
   const list=showSaved?saved:items;
   if(!list.length){m.innerHTML=`<div class="msg">${showSaved?L("No saved stories yet. Tap ☆ on any story.","अभी कोई सेव की हुई खबर नहीं है। ☆ दबाएँ।"):"Couldn't load news. Check your connection and tap ↻."}</div>`;return}
@@ -146,7 +165,8 @@ function render(){
   m.innerHTML=list.map(a=>view==="cards"?
     `<article class="c"><div class="im" ${bg(a)}></div><div class="bd"><div class="meta">${tagHTML(a)}<span>${a.src}</span><span>•</span><span>${a.date?ago(a.date):""}</span></div><h2>${hi&&a.title_hi?a.title_hi:a.title}</h2><p>${hi&&a.sum_hi?a.sum_hi:a.sum}</p><div class="act"><button data-s="${a.id}">${isSaved(a.id)?L("★ Saved","★ सेव्ड"):L("☆ Save","☆ सेव")}</button><a class="pr" href="${a.link}" target="_blank" rel="noopener">${L("Read full ↗","पूरा पढ़ें ↗")}</a></div></div></article>`:
     `<div class="g" data-o="${a.link}"><div class="im" ${bg(a)}></div><div class="bd"><div class="meta">${tagHTML(a)}<span>${a.src}</span><span>${a.date?ago(a.date):""}</span></div><h3>${hi&&a.title_hi?a.title_hi:a.title}</h3></div></div>`).join("");
-  m.scrollTop=0;
+  if(!keep)m.scrollTop=0;
+  ensureHi();
 }
 async function go(force){
   showSaved=false;$("#bm").classList.remove("on");
