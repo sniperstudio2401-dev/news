@@ -85,6 +85,26 @@ def enrich(item):
         item["img"] = meta(page, "og:image")
     return item
 
+
+import urllib.parse
+
+def to_hindi(text):
+    if not text: return ""
+    url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=hi&dt=t&q=" + urllib.parse.quote(text)
+    for _ in range(2):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8"))
+            return "".join(part[0] for part in data[0] if part and part[0])
+        except Exception:
+            pass
+    return ""
+
+def add_hindi(item):
+    item["title_hi"] = to_hindi(item["title"])
+    item["sum_hi"] = to_hindi(item["sum"])
+    return item
+
 result={}
 for tab,urls in FEEDS.items():
     items=[]
@@ -102,6 +122,7 @@ for tab,urls in FEEDS.items():
     top = uniq[:25]
     with ThreadPoolExecutor(8) as ex:
         top = list(ex.map(enrich, top))
+        top = list(ex.map(add_hindi, top))
     result[tab] = top
     print(tab,len(result[tab]))
 result["_updated"]=int(datetime.now(timezone.utc).timestamp())
