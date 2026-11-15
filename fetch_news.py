@@ -54,6 +54,37 @@ def parse(data):
         out.append({"id":txt(it,"guid","id") or link,"title":t,"sum":words(strip(desc)),"img":im,"link":link,"ts":when(txt(it,"pubDate","published","updated","date")),"src":src})
     return out
 
+
+from concurrent.futures import ThreadPoolExecutor
+
+def meta(page, prop):
+    for m in re.finditer(r"<meta[^>]+>", page):
+        tag = m.group(0)
+        if re.search(r'(property|name)=["\']%s["\']' % re.escape(prop), tag):
+            c = re.search(r'content=["\']([^"\']*)', tag)
+            if c: return html.unescape(c.group(1)).strip()
+    return ""
+
+def enrich(item):
+    try:
+        req = urllib.request.Request(item["link"], headers={"User-Agent": "Mozilla/5.0 (PulseNews)"})
+        page = urllib.request.urlopen(req, timeout=15).read(600000).decode("utf-8", "ignore")
+    except Exception:
+        return item
+    paras = []
+    for m in re.finditer(r"<p[^>]*>(.*?)</p>", page, re.S):
+        t = strip(m.group(1))
+        if len(t) > 70 and "cookie" not in t.lower() and "subscribe" not in t.lower():
+            paras.append(t)
+        if len(" ".join(paras).split()) > 90: break
+    body = " ".join(paras)
+    og = strip(meta(page, "og:description") or meta(page, "description"))
+    best = body if len(body.split()) >= 30 else (og if len(og.split()) > len(item["sum"].split()) else item["sum"])
+    item["sum"] = words(best, 70)
+    if not item["img"]:
+        item["img"] = meta(page, "og:image")
+    return item
+
 result={}
 for tab,urls in FEEDS.items():
     items=[]
@@ -68,7 +99,10 @@ for tab,urls in FEEDS.items():
         k=i["title"][:40]
         if k in seen: continue
         seen.add(k); uniq.append(i)
-    result[tab]=uniq[:40]
+    top = uniq[:25]
+    with ThreadPoolExecutor(8) as ex:
+        top = list(ex.map(enrich, top))
+    result[tab] = top
     print(tab,len(result[tab]))
 result["_updated"]=int(datetime.now(timezone.utc).timestamp())
 json.dump(result,open("news.json","w"),ensure_ascii=False)
