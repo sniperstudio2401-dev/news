@@ -61,9 +61,19 @@ def meta(page, prop):
     for m in re.finditer(r"<meta[^>]+>", page):
         tag = m.group(0)
         if re.search(r'(property|name)=["\']%s["\']' % re.escape(prop), tag):
-            c = re.search(r'content=["\']([^"\']*)', tag)
-            if c: return html.unescape(c.group(1)).strip()
+            c = re.search(r'content=(["\'])(.*?)\1', tag, re.S)
+            if c: return html.unescape(c.group(2)).strip()
     return ""
+
+JUNK = re.compile(r"trending|share price|also read|read more|follow us|subscribe|sign in|log in|cookie|advertis|click here|download the app|copyright|all rights|newsletter|whatsapp|telegram", re.I)
+
+def clean_para(t):
+    w = t.split()
+    if len(w) < 12 or len(w) > 120: return False
+    if JUNK.search(t): return False
+    if t.count(" , ") >= 2 or t.count(" | ") >= 2: return False
+    if not re.search(r'[.!?"\u201d\u2019]$', t): return False
+    return True
 
 def enrich(item):
     try:
@@ -71,20 +81,23 @@ def enrich(item):
         page = urllib.request.urlopen(req, timeout=15).read(600000).decode("utf-8", "ignore")
     except Exception:
         return item
-    paras = []
-    for m in re.finditer(r"<p[^>]*>(.*?)</p>", page, re.S):
-        t = strip(m.group(1))
-        if len(t) > 70 and "cookie" not in t.lower() and "subscribe" not in t.lower():
-            paras.append(t)
-        if len(" ".join(paras).split()) > 90: break
-    body = " ".join(paras)
+    m = re.search(r"<article[^>]*>(.*?)</article>", page, re.S)
+    scope = m.group(1) if m else ""
     og = strip(meta(page, "og:description") or meta(page, "description"))
-    best = body if len(body.split()) >= 30 else (og if len(og.split()) > len(item["sum"].split()) else item["sum"])
+    parts = []
+    if og and not JUNK.search(og) and len(og.split()) >= 8: parts.append(og)
+    for pm in re.finditer(r"<p[^>]*>(.*?)</p>", scope, re.S):
+        t = strip(pm.group(1))
+        if clean_para(t) and not any(t[:40] in x for x in parts):
+            parts.append(t)
+        if len(" ".join(parts).split()) >= 55: break
+    cand = " ".join(parts)
+    feed = item["sum"] if not JUNK.search(item["sum"]) else ""
+    best = cand if len(cand.split()) > len(feed.split()) else feed
     item["sum"] = words(best, 70)
     if not item["img"]:
         item["img"] = meta(page, "og:image")
     return item
-
 
 import urllib.parse
 
@@ -124,6 +137,6 @@ for tab,urls in FEEDS.items():
         top = list(ex.map(enrich, top))
         top = list(ex.map(add_hindi, top))
     result[tab] = top
-    print(tab,len(result[tab]))
+    print(tab,len(result[tab]),"translated:",sum(1 for i in result[tab] if i.get("title_hi")))
 result["_updated"]=int(datetime.now(timezone.utc).timestamp())
 json.dump(result,open("news.json","w"),ensure_ascii=False)
