@@ -51,6 +51,7 @@ main.grid{padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minma
 <header>
   <div class="top">
     <div class="logo">Pulse<b>.</b>News</div>
+    <button class="ib" id="hi" title="हिन्दी / English">हिं</button>
     <button class="ib" id="vw" title="Switch view">▦</button>
     <button class="ib" id="bm" title="Saved">★</button>
     <button class="ib" id="th" title="Theme">◐</button>
@@ -72,6 +73,9 @@ const API="https://api.rss2json.com/v1/api.json?rss_url=";
 const UP=/\b(surge|rally|rall(y|ies)|gain|gains|jump|soar|record high|bull|rise|rises|up|beat|beats|growth|profit|strong|upgrade|boost)\b/i;
 const DN=/\b(fall|falls|slump|crash|plunge|drop|drops|bear|loss|losses|weak|decline|cut|cuts|selloff|sell-off|tumble|slide|downgrade|fear|war|probe)\b/i;
 const $=s=>document.querySelector(s);
+let hi=localStorage.hi==="1";
+const TR={Markets:"बाज़ार",India:"भारत",World:"दुनिया",Tech:"टेक",Space:"अंतरिक्ष"};
+const L=(e,h)=>hi?h:e;
 let tab=localStorage.tab||"Markets", view=localStorage.view||"cards", saved=JSON.parse(localStorage.saved||"[]"), showSaved=false, items=[];
 if(localStorage.dark!=="0")document.body.classList.add("dark");
 
@@ -133,15 +137,15 @@ function toggleSave(id){
   if(isSaved(id)){saved=saved.filter(s=>s.id!==id);toast("Removed")}else{saved.unshift(it);toast("Saved ★")}
   localStorage.saved=JSON.stringify(saved);if(showSaved)render()
 }
-function tagHTML(a){const s=sent(a.title+" "+a.sum),l={up:"Bullish",dn:"Bearish",nu:"Neutral"}[s];return tab==="Markets"||showSaved?`<span class="tag ${s}">${l}</span>`:""}
+function tagHTML(a){const s=sent(a.title+" "+a.sum),l=(hi?{up:"तेज़ी",dn:"मंदी",nu:"सामान्य"}:{up:"Bullish",dn:"Bearish",nu:"Neutral"})[s];return tab==="Markets"||showSaved?`<span class="tag ${s}">${l}</span>`:""}
 function render(){
   const m=$("#main");m.className=view;
   const list=showSaved?saved:items;
-  if(!list.length){m.innerHTML=`<div class="msg">${showSaved?"No saved stories yet. Tap ☆ on any story.":"Couldn't load news. Check your connection and tap ↻."}</div>`;return}
+  if(!list.length){m.innerHTML=`<div class="msg">${showSaved?L("No saved stories yet. Tap ☆ on any story.","अभी कोई सेव की हुई खबर नहीं है। ☆ दबाएँ।"):"Couldn't load news. Check your connection and tap ↻."}</div>`;return}
   const bg=a=>a.img?`style="background-image:url('${a.img.replace(/'/g,"%27")}')"`:"";
   m.innerHTML=list.map(a=>view==="cards"?
-    `<article class="c"><div class="im" ${bg(a)}></div><div class="bd"><div class="meta">${tagHTML(a)}<span>${a.src}</span><span>•</span><span>${a.date?ago(a.date):""}</span></div><h2>${a.title}</h2><p>${a.sum}</p><div class="act"><button data-s="${a.id}">${isSaved(a.id)?"★ Saved":"☆ Save"}</button><a class="pr" href="${a.link}" target="_blank" rel="noopener">Read full ↗</a></div></div></article>`:
-    `<div class="g" data-o="${a.link}"><div class="im" ${bg(a)}></div><div class="bd"><div class="meta">${tagHTML(a)}<span>${a.src}</span><span>${a.date?ago(a.date):""}</span></div><h3>${a.title}</h3></div></div>`).join("");
+    `<article class="c"><div class="im" ${bg(a)}></div><div class="bd"><div class="meta">${tagHTML(a)}<span>${a.src}</span><span>•</span><span>${a.date?ago(a.date):""}</span></div><h2>${hi&&a.title_hi?a.title_hi:a.title}</h2><p>${hi&&a.sum_hi?a.sum_hi:a.sum}</p><div class="act"><button data-s="${a.id}">${isSaved(a.id)?L("★ Saved","★ सेव्ड"):L("☆ Save","☆ सेव")}</button><a class="pr" href="${a.link}" target="_blank" rel="noopener">${L("Read full ↗","पूरा पढ़ें ↗")}</a></div></div></article>`:
+    `<div class="g" data-o="${a.link}"><div class="im" ${bg(a)}></div><div class="bd"><div class="meta">${tagHTML(a)}<span>${a.src}</span><span>${a.date?ago(a.date):""}</span></div><h3>${hi&&a.title_hi?a.title_hi:a.title}</h3></div></div>`).join("");
   m.scrollTop=0;
 }
 async function go(force){
@@ -150,12 +154,15 @@ async function go(force){
   $("#main").innerHTML='<div class="sk">Loading…</div>';
   items=await load(tab,force);render();
 }
-$("#tabs").innerHTML=Object.keys(FEEDS).map(t=>`<button class="tab" data-t="${t}">${t}</button>`).join("");
+function drawTabs(){$("#tabs").innerHTML=Object.keys(FEEDS).map(t=>`<button class="tab${t===tab?" on":""}" data-t="${t}">${hi?TR[t]:t}</button>`).join("")}
+drawTabs();
 $("#tabs").onclick=e=>{const t=e.target.dataset.t;if(t){tab=t;localStorage.tab=t;go()}};
 $("#main").onclick=e=>{
-  const s=e.target.closest("[data-s]");if(s){toggleSave(s.dataset.s);s.textContent=isSaved(s.dataset.s)?"★ Saved":"☆ Save";return}
+  const s=e.target.closest("[data-s]");if(s){toggleSave(s.dataset.s);s.textContent=isSaved(s.dataset.s)?L("★ Saved","★ सेव्ड"):L("☆ Save","☆ सेव");return}
   const g=e.target.closest("[data-o]");if(g)window.open(g.dataset.o,"_blank","noopener")
 };
+$("#hi").onclick=()=>{hi=!hi;localStorage.hi=hi?"1":"0";$("#hi").textContent=hi?"EN":"हिं";drawTabs();render()};
+$("#hi").textContent=hi?"EN":"हिं";
 $("#vw").onclick=()=>{view=view==="cards"?"grid":"cards";localStorage.view=view;render()};
 $("#bm").onclick=()=>{showSaved=!showSaved;$("#bm").classList.toggle("on",showSaved);render()};
 $("#th").onclick=()=>{document.body.classList.toggle("dark");localStorage.dark=document.body.classList.contains("dark")?"1":"0"};
