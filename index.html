@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0f17">
+<title>Pulse News</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#12161f;--mu:#6b7280;--ac:#2563eb;--bd:#e5e7eb;--up:#16a34a;--dn:#dc2626;--nu:#9ca3af}
+body.dark{--bg:#0b0f17;--card:#141a26;--tx:#e8ecf4;--mu:#8b95a7;--ac:#60a5fa;--bd:#232c3d}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column}
+header{padding:env(safe-area-inset-top) 12px 0;background:var(--bg);border-bottom:1px solid var(--bd);flex:none}
+.top{display:flex;align-items:center;gap:8px;padding:10px 0 6px}
+.logo{font-weight:800;font-size:20px;letter-spacing:-.5px;flex:1}
+.logo b{color:var(--ac)}
+.ib{background:var(--card);border:1px solid var(--bd);color:var(--tx);border-radius:10px;padding:7px 10px;font-size:15px;cursor:pointer}
+.ib.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;padding:7px 14px;border-radius:99px;border:1px solid var(--bd);background:var(--card);color:var(--mu);font-size:14px;font-weight:600;cursor:pointer}
+.tab.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+main{flex:1;overflow-y:auto;position:relative}
+/* cards view */
+main.cards{scroll-snap-type:y mandatory}
+.c{scroll-snap-align:start;height:100%;display:flex;flex-direction:column;background:var(--card)}
+.c .im{flex:0 0 38%;background:linear-gradient(135deg,#1e3a8a,#7c3aed) center/cover}
+.c .bd{flex:1;padding:16px 18px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+.c h2{font-size:20px;line-height:1.25}
+.c p{font-size:15.5px;line-height:1.5;color:var(--tx);opacity:.88}
+.meta{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--mu);flex-wrap:wrap}
+.tag{padding:2px 8px;border-radius:99px;font-weight:700;font-size:11px;color:#fff}
+.tag.up{background:var(--up)}.tag.dn{background:var(--dn)}.tag.nu{background:var(--nu)}
+.act{margin-top:auto;display:flex;gap:10px}
+.act a,.act button{flex:1;text-align:center;padding:11px;border-radius:12px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-weight:600;font-size:14px;text-decoration:none;cursor:pointer}
+.act a.pr{background:var(--ac);color:#fff;border-color:var(--ac)}
+/* grid view */
+main.grid{padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;align-content:start}
+.g{background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer}
+.g .im{height:130px;background:linear-gradient(135deg,#1e3a8a,#7c3aed) center/cover}
+.g .bd{padding:12px;display:flex;flex-direction:column;gap:8px}
+.g h3{font-size:15px;line-height:1.3}
+.msg{padding:40px 20px;text-align:center;color:var(--mu)}
+.sk{height:100%;display:flex;align-items:center;justify-content:center;color:var(--mu)}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:8px 16px;border-radius:99px;font-size:13px;opacity:0;transition:.3s;pointer-events:none}
+#toast.s{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="logo">Pulse<b>.</b>News</div>
+    <button class="ib" id="vw" title="Switch view">▦</button>
+    <button class="ib" id="bm" title="Saved">★</button>
+    <button class="ib" id="th" title="Theme">◐</button>
+    <button class="ib" id="rf" title="Refresh">↻</button>
+  </div>
+  <div class="tabs" id="tabs"></div>
+</header>
+<main class="cards" id="main"><div class="sk">Loading…</div></main>
+<div id="toast"></div>
+<script>
+const FEEDS={
+  Markets:["https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms","https://www.moneycontrol.com/rss/latestnews.xml","https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms"],
+  India:["https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en","https://www.thehindu.com/news/national/feeder/default.rss"],
+  World:["https://feeds.bbci.co.uk/news/world/rss.xml","https://www.aljazeera.com/xml/rss/all.xml"],
+  Tech:["https://techcrunch.com/feed/","https://www.theverge.com/rss/index.xml"],
+  Space:["https://www.nasa.gov/feed/","https://spaceflightnow.com/feed/"]
+};
+const API="https://api.rss2json.com/v1/api.json?rss_url=";
+const UP=/\b(surge|rally|rall(y|ies)|gain|gains|jump|soar|record high|bull|rise|rises|up|beat|beats|growth|profit|strong|upgrade|boost)\b/i;
+const DN=/\b(fall|falls|slump|crash|plunge|drop|drops|bear|loss|losses|weak|decline|cut|cuts|selloff|sell-off|tumble|slide|downgrade|fear|war|probe)\b/i;
+const $=s=>document.querySelector(s);
+let tab=localStorage.tab||"Markets", view=localStorage.view||"cards", saved=JSON.parse(localStorage.saved||"[]"), showSaved=false, items=[];
+if(localStorage.dark!=="0")document.body.classList.add("dark");
+
+function toast(t){const e=$("#toast");e.textContent=t;e.classList.add("s");setTimeout(()=>e.classList.remove("s"),1400)}
+function strip(h){const d=document.createElement("div");d.innerHTML=h||"";return(d.textContent||"").replace(/\s+/g," ").trim()}
+function words(t,n){const w=t.split(" ");return w.length>n?w.slice(0,n).join(" ")+"…":t}
+function sent(t){const u=UP.test(t),d=DN.test(t);return u&&!d?"up":d&&!u?"dn":"nu"}
+function pd(s){const d=new Date(/\d{4}-\d\d-\d\d \d/.test(s)?s.replace(" ","T")+"Z":s);return isNaN(d)?0:d.getTime()}
+function ago(s){const m=Math.max(1,(Date.now()-pd(s))/6e4);return m<60?Math.round(m)+"m ago":m<1440?Math.round(m/60)+"h ago":Math.round(m/1440)+"d ago"}
+function img(i){return i.thumbnail||(i.enclosure&&i.enclosure.link&&/image|jpe?g|png|webp/i.test((i.enclosure.type||"")+i.enclosure.link)?i.enclosure.link:"")||((i.content||"").match(/<img[^>]+src="([^"]+)"/)||[])[1]||""}
+function host(u){try{return new URL(u).hostname.replace("www.","")}catch(e){return""}}
+
+
+const PROXIES=[u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),u=>"https://corsproxy.io/?url="+encodeURIComponent(u),u=>"https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u)];
+function tm(el,n){const e=el.getElementsByTagName(n)[0];return e?e.textContent:""}
+function parseXML(x,u){
+  const d=new DOMParser().parseFromString(x,"text/xml");
+  const ft=strip(tm(d,"title"));
+  return[...d.querySelectorAll("item,entry")].map(i=>{
+    const l=i.querySelector("link");const link=l?(l.getAttribute("href")||l.textContent):"";
+    const desc=tm(i,"description")||tm(i,"summary")||tm(i,"content")||tm(i,"content:encoded");
+    let im="";const mc=i.getElementsByTagName("media:content")[0]||i.getElementsByTagName("media:thumbnail")[0]||i.getElementsByTagName("enclosure")[0];
+    if(mc)im=mc.getAttribute("url")||"";
+    if(!im){const m=desc.match(/<img[^>]+src=["']([^"']+)/);if(m)im=m[1]}
+    return{id:tm(i,"guid")||tm(i,"id")||link,title:strip(tm(i,"title")),sum:words(strip(desc),55),img:im,link:link.trim(),date:tm(i,"pubDate")||tm(i,"published")||tm(i,"updated")||"",src:ft.split(/[-|:]/)[0].trim()||host(u)}
+  });
+}
+async function fetchFeed(u){
+  try{
+    const r=await fetch(API+encodeURIComponent(u));const j=await r.json();
+    if(j.items&&j.items.length){const src=(j.feed&&j.feed.title)||"";return j.items.map(i=>({id:i.guid||i.link,title:strip(i.title),sum:words(strip(i.description||i.content),55),img:img(i),link:i.link,date:i.pubDate||"",src:src.split(/[-|:]/)[0].trim()||host(i.link)}))}
+  }catch(e){}
+  for(const p of PROXIES){
+    try{const r=await fetch(p(u));if(!r.ok)continue;const x=await r.text();const o=parseXML(x,u);if(o.length)return o}catch(e){}
+  }
+  return[];
+}
+async function load(t,force){
+  const key="cache_"+t;
+  if(!force){try{const c=JSON.parse(localStorage[key]||"null");if(c&&Date.now()-c.t<6e5)return c.d}catch(e){}}
+  try{
+    const r=await fetch("news.json?v="+Date.now());
+    if(r.ok){const j=await r.json();const a=(j[t]||[]).map(i=>({...i,date:new Date(i.ts*1000).toISOString()}));
+      if(a.length){try{localStorage[key]=JSON.stringify({t:Date.now(),d:a})}catch(e){}return a}}
+  }catch(e){}
+  const res=await Promise.allSettled(FEEDS[t].map(fetchFeed));
+  let all=[];
+  res.forEach(r=>{if(r.status==="fulfilled")all.push(...r.value)});
+  const seen=new Set();all=all.filter(a=>a.title&&!seen.has(a.title.slice(0,40))&&seen.add(a.title.slice(0,40)));
+  all.sort((a,b)=>pd(b.date)-pd(a.date));
+  all=all.slice(0,40);
+  if(all.length){try{localStorage[key]=JSON.stringify({t:Date.now(),d:all})}catch(e){}return all}
+  try{const c=JSON.parse(localStorage[key]||"null");if(c)return c.d}catch(e){}
+  return[];
+}
+function isSaved(id){return saved.some(s=>s.id===id)}
+function toggleSave(id){
+  const it=items.find(x=>x.id===id)||saved.find(x=>x.id===id);if(!it)return;
+  if(isSaved(id)){saved=saved.filter(s=>s.id!==id);toast("Removed")}else{saved.unshift(it);toast("Saved ★")}
+  localStorage.saved=JSON.stringify(saved);if(showSaved)render()
+}
+function tagHTML(a){const s=sent(a.title+" "+a.sum),l={up:"Bullish",dn:"Bearish",nu:"Neutral"}[s];return tab==="Markets"||showSaved?`<span class="tag ${s}">${l}</span>`:""}
+function render(){
+  const m=$("#main");m.className=view;
+  const list=showSaved?saved:items;
+  if(!list.length){m.innerHTML=`<div class="msg">${showSaved?"No saved stories yet. Tap ☆ on any story.":"Couldn't load news. Check your connection and tap ↻."}</div>`;return}
+  const bg=a=>a.img?`style="background-image:url('${a.img.replace(/'/g,"%27")}')"`:"";
+  m.innerHTML=list.map(a=>view==="cards"?
+    `<article class="c"><div class="im" ${bg(a)}></div><div class="bd"><div class="meta">${tagHTML(a)}<span>${a.src}</span><span>•</span><span>${a.date?ago(a.date):""}</span></div><h2>${a.title}</h2><p>${a.sum}</p><div class="act"><button data-s="${a.id}">${isSaved(a.id)?"★ Saved":"☆ Save"}</button><a class="pr" href="${a.link}" target="_blank" rel="noopener">Read full ↗</a></div></div></article>`:
+    `<div class="g" data-o="${a.link}"><div class="im" ${bg(a)}></div><div class="bd"><div class="meta">${tagHTML(a)}<span>${a.src}</span><span>${a.date?ago(a.date):""}</span></div><h3>${a.title}</h3></div></div>`).join("");
+  m.scrollTop=0;
+}
+async function go(force){
+  showSaved=false;$("#bm").classList.remove("on");
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.t===tab));
+  $("#main").innerHTML='<div class="sk">Loading…</div>';
+  items=await load(tab,force);render();
+}
+$("#tabs").innerHTML=Object.keys(FEEDS).map(t=>`<button class="tab" data-t="${t}">${t}</button>`).join("");
+$("#tabs").onclick=e=>{const t=e.target.dataset.t;if(t){tab=t;localStorage.tab=t;go()}};
+$("#main").onclick=e=>{
+  const s=e.target.closest("[data-s]");if(s){toggleSave(s.dataset.s);s.textContent=isSaved(s.dataset.s)?"★ Saved":"☆ Save";return}
+  const g=e.target.closest("[data-o]");if(g)window.open(g.dataset.o,"_blank","noopener")
+};
+$("#vw").onclick=()=>{view=view==="cards"?"grid":"cards";localStorage.view=view;render()};
+$("#bm").onclick=()=>{showSaved=!showSaved;$("#bm").classList.toggle("on",showSaved);render()};
+$("#th").onclick=()=>{document.body.classList.toggle("dark");localStorage.dark=document.body.classList.contains("dark")?"1":"0"};
+$("#rf").onclick=()=>{go(true);toast("Refreshing…")};
+go();
+</script>
+</body>
+</html>
