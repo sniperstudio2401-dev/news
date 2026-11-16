@@ -63,18 +63,22 @@ main.grid{padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minma
 <div id="toast"></div>
 <script>
 const FEEDS={
-  Markets:["https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms","https://www.moneycontrol.com/rss/latestnews.xml","https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms"],
+  Markets:["https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms","https://www.moneycontrol.com/rss/latestnews.xml"],
+  Business:["https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms","https://feeds.bbci.co.uk/news/business/rss.xml"],
   India:["https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en","https://www.thehindu.com/news/national/feeder/default.rss"],
   World:["https://feeds.bbci.co.uk/news/world/rss.xml","https://www.aljazeera.com/xml/rss/all.xml"],
+  Sports:["https://timesofindia.indiatimes.com/rssfeeds/4719148.cms","https://feeds.bbci.co.uk/sport/rss.xml"],
+  Entertainment:["https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms","https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml"],
   Tech:["https://techcrunch.com/feed/","https://www.theverge.com/rss/index.xml"],
-  Space:["https://www.nasa.gov/feed/","https://spaceflightnow.com/feed/"]
+  Space:["https://www.nasa.gov/feed/","https://spaceflightnow.com/feed/"],
+  Hindi:["https://feeds.bbci.co.uk/hindi/rss.xml","https://navbharattimes.indiatimes.com/rssfeedstopstories.cms"]
 };
 const API="https://api.rss2json.com/v1/api.json?rss_url=";
 const UP=/\b(surge|rally|rall(y|ies)|gain|gains|jump|soar|record high|bull|rise|rises|up|beat|beats|growth|profit|strong|upgrade|boost)\b/i;
 const DN=/\b(fall|falls|slump|crash|plunge|drop|drops|bear|loss|losses|weak|decline|cut|cuts|selloff|sell-off|tumble|slide|downgrade|fear|war|probe)\b/i;
 const $=s=>document.querySelector(s);
 let hi=localStorage.hi==="1";
-const TR={Markets:"बाज़ार",India:"भारत",World:"दुनिया",Tech:"टेक",Space:"अंतरिक्ष"};
+const TR={Markets:"बाज़ार",Business:"कारोबार",India:"भारत",World:"दुनिया",Sports:"खेल",Entertainment:"मनोरंजन",Tech:"टेक",Space:"अंतरिक्ष",Hindi:"हिन्दी"};
 const L=(e,h)=>hi?h:e;
 let tab=localStorage.tab||"Markets", view=localStorage.view||"cards", saved=JSON.parse(localStorage.saved||"[]"), showSaved=false, items=[];
 if(localStorage.dark!=="0")document.body.classList.add("dark");
@@ -147,7 +151,7 @@ async function trHi(t){
 }
 let hiBusy=false;
 async function ensureHi(){
-  if(!hi||hiBusy)return;const list=(showSaved?saved:items).filter(a=>!a.title_hi);if(!list.length)return;
+  if(!hi||hiBusy)return;if(tab==="Hindi"&&!showSaved)items.forEach(a=>{if(!a.title_hi){a.title_hi=a.title;a.sum_hi=a.sum}});const list=(showSaved?saved:items).filter(a=>!a.title_hi);if(!list.length)return;
   hiBusy=true;
   for(let i=0;i<list.length;i+=6){
     await Promise.all(list.slice(i,i+6).map(async a=>{a.title_hi=await trHi(a.title);a.sum_hi=await trHi(a.sum)}));
